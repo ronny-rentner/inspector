@@ -51,6 +51,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
+  AppWindow,
   Bell,
   Files,
   FolderTree,
@@ -75,6 +76,7 @@ import SamplingTab, { PendingRequest } from "./components/SamplingTab";
 import Sidebar from "./components/Sidebar";
 import ToolsTab from "./components/ToolsTab";
 import TasksTab from "./components/TasksTab";
+import AppsTab from "./components/AppsTab";
 import { InspectorConfig } from "./lib/configurationTypes";
 import {
   getMCPProxyAddress,
@@ -308,11 +310,13 @@ const App = () => {
       ...(serverCapabilities?.prompts ? ["prompts"] : []),
       ...(serverCapabilities?.tools ? ["tools"] : []),
       ...(serverCapabilities?.tasks ? ["tasks"] : []),
+      "apps",
       "ping",
       "sampling",
       "elicitations",
       "roots",
       "auth",
+      "metadata",
     ];
 
     if (!validTabs.includes(originatingTab)) return;
@@ -440,11 +444,13 @@ const App = () => {
         ...(serverCapabilities?.prompts ? ["prompts"] : []),
         ...(serverCapabilities?.tools ? ["tools"] : []),
         ...(serverCapabilities?.tasks ? ["tasks"] : []),
+        "apps",
         "ping",
         "sampling",
         "elicitations",
         "roots",
         "auth",
+        "metadata",
       ];
 
       const isValidTab = validTabs.includes(hash);
@@ -757,11 +763,13 @@ const App = () => {
             ...(serverCapabilities?.prompts ? ["prompts"] : []),
             ...(serverCapabilities?.tools ? ["tools"] : []),
             ...(serverCapabilities?.tasks ? ["tasks"] : []),
+            "apps",
             "ping",
             "sampling",
             "elicitations",
             "roots",
             "auth",
+            "metadata",
           ];
 
           if (validTabs.includes(originatingTab)) {
@@ -1308,6 +1316,10 @@ const App = () => {
                   <ListTodo className="w-4 h-4 mr-2" />
                   Tasks
                 </TabsTrigger>
+                <TabsTrigger value="apps">
+                  <AppWindow className="w-4 h-4 mr-2" />
+                  Apps
+                </TabsTrigger>
                 <TabsTrigger value="ping">
                   <Bell className="w-4 h-4 mr-2" />
                   Ping
@@ -1496,6 +1508,14 @@ const App = () => {
                       }}
                       error={errors.tasks}
                       nextCursor={nextTaskCursor}
+                    />
+                    <AppsTab
+                      tools={tools}
+                      listTools={() => {
+                        clearError("tools");
+                        listTools();
+                      }}
+                      error={errors.tools}
                     />
                     <ConsoleTab />
                     <PingTab
