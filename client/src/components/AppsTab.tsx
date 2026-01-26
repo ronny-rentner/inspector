@@ -2,13 +2,18 @@ import { useEffect, useState, useCallback } from "react";
 import { TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw, X } from "lucide-react";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import AppRenderer from "./AppRenderer";
 
 interface AppsTabProps {
   tools: Tool[];
   listTools: () => void;
   error: string | null;
+  mcpClient: Client | null;
+  onReadResource: (uri: string) => void;
+  resourceContentMap: Record<string, string>;
 }
 
 // Type guard to check if a tool has UI metadata
@@ -17,7 +22,14 @@ const hasUIMetadata = (tool: Tool): boolean => {
   return !!meta?.ui?.resourceUri;
 };
 
-const AppsTab = ({ tools, listTools, error }: AppsTabProps) => {
+const AppsTab = ({
+  tools,
+  listTools,
+  error,
+  mcpClient,
+  onReadResource,
+  resourceContentMap,
+}: AppsTabProps) => {
   const [appTools, setAppTools] = useState<Tool[]>([]);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
 
@@ -27,7 +39,7 @@ const AppsTab = ({ tools, listTools, error }: AppsTabProps) => {
     setAppTools(filtered);
 
     // If current selected tool is no longer available, reset selection
-    if (selectedTool && !filtered.find(t => t.name === selectedTool.name)) {
+    if (selectedTool && !filtered.find((t) => t.name === selectedTool.name)) {
       setSelectedTool(null);
     }
   }, [tools, selectedTool]);
@@ -35,6 +47,10 @@ const AppsTab = ({ tools, listTools, error }: AppsTabProps) => {
   const handleRefresh = useCallback(() => {
     listTools();
   }, [listTools]);
+
+  const handleCloseApp = useCallback(() => {
+    setSelectedTool(null);
+  }, []);
 
   return (
     <TabsContent value="apps" className="space-y-4">
@@ -96,17 +112,26 @@ const AppsTab = ({ tools, listTools, error }: AppsTabProps) => {
 
       {selectedTool && (
         <div className="mt-6 border-t pt-6">
-          <h3 className="text-xl font-semibold mb-4">
-            Selected: {selectedTool.name}
-          </h3>
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              MCP Apps UI rendering is coming soon. For now, you can see which
-              tools support the Apps extension. Full rendering support with the
-              official React components will be added in a future update.
-            </AlertDescription>
-          </Alert>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold">{selectedTool.name}</h3>
+            <Button onClick={handleCloseApp} variant="ghost" size="sm">
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+          <AppRenderer
+            tool={selectedTool}
+            mcpClient={mcpClient}
+            onReadResource={onReadResource}
+            resourceContent={
+              resourceContentMap[
+                (
+                  selectedTool as Tool & {
+                    _meta?: { ui?: { resourceUri?: string } };
+                  }
+                )._meta?.ui?.resourceUri || ""
+              ] || ""
+            }
+          />
         </div>
       )}
     </TabsContent>
