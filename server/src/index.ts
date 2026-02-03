@@ -30,6 +30,7 @@ import mcpProxy from "./mcpProxy.js";
 import { randomUUID, randomBytes, timingSafeEqual } from "node:crypto";
 
 const DEFAULT_MCP_PROXY_LISTEN_PORT = "6277";
+const SHOULD_FORWARD_STDERR = process.env.MCP_PROXY_FORWARD_STDERR !== "false";
 
 const defaultEnvironment = {
   ...getDefaultEnvironment(),
@@ -596,25 +597,37 @@ app.get(
       await webAppTransport.start();
 
       (serverTransport as StdioClientTransport).stderr!.on("data", (chunk) => {
+        if (!SHOULD_FORWARD_STDERR) {
+          process.stderr.write(chunk);
+          return;
+        }
+
         if (chunk.toString().includes("MODULE_NOT_FOUND")) {
           // Server command not found, remove transports
           const message = "Command not found, transports removed";
-          webAppTransport.send({
-            jsonrpc: "2.0",
-            method: "notifications/message",
-            params: {
-              level: "emergency",
-              logger: "proxy",
-              data: {
-                message,
+          webAppTransport
+            .send({
+              jsonrpc: "2.0",
+              method: "notifications/message",
+              params: {
+                level: "emergency",
+                logger: "proxy",
+                data: {
+                  message,
+                },
               },
-            },
-          });
+            })
+            .catch((error) => {
+              if (error instanceof Error && error.message === "Not connected") {
+                console.warn(
+                  "Skipped sending MODULE_NOT_FOUND notification: browser disconnected.",
+                );
+              } else {
+                throw error;
+              }
+            });
           webAppTransport.close();
           serverTransport.close();
-          webAppTransports.delete(webAppTransport.sessionId);
-          serverTransports.delete(webAppTransport.sessionId);
-          sessionHeaderHolders.delete(webAppTransport.sessionId);
           console.error(message);
         } else {
           // Inspect message and attempt to assign a RFC 5424 Syslog Protocol level
@@ -649,17 +662,27 @@ app.get(
           } else {
             level = "info";
           }
-          webAppTransport.send({
-            jsonrpc: "2.0",
-            method: "notifications/message",
-            params: {
-              level,
-              logger: "stdio",
-              data: {
-                message,
+          webAppTransport
+            .send({
+              jsonrpc: "2.0",
+              method: "notifications/message",
+              params: {
+                level,
+                logger: "stdio",
+                data: {
+                  message,
+                },
               },
-            },
-          });
+            })
+            .catch((error) => {
+              if (error instanceof Error && error.message === "Not connected") {
+                console.warn(
+                  "Skipped forwarding log to browser: connection closed.",
+                );
+              } else {
+                throw error;
+              }
+            });
         }
       });
 
