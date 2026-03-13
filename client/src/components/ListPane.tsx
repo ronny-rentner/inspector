@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 type ListPaneProps<T> = {
   items: T[];
   listItems: () => void;
-  clearItems: () => void;
+  clearItems?: () => void;
   selectedItem?: T | null;
   setSelectedItem: (item: T) => void;
   renderItem: (item: T) => React.ReactNode;
@@ -50,7 +50,9 @@ const ListPane = <T extends object>({
         <h3 className="font-semibold dark:text-white flex-shrink-0">{title}</h3>
       </div>
       <div className="p-4 flex flex-col flex-1 min-h-0 overflow-hidden">
-        <div className="grid grid-cols-2 gap-2 mb-4 flex-shrink-0">
+        <div
+          className={`grid ${clearItems ? "grid-cols-2" : "grid-cols-1"} gap-2 mb-4 flex-shrink-0`}
+        >
           <Button
             variant="outline"
             className="w-full"
@@ -59,14 +61,16 @@ const ListPane = <T extends object>({
           >
             {buttonText}
           </Button>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={clearItems}
-            disabled={items.length === 0}
-          >
-            Clear
-          </Button>
+          {clearItems && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={clearItems}
+              disabled={items.length === 0}
+            >
+              Clear
+            </Button>
+          )}
         </div>
         {items.length > 3 && (
           <div className="relative mb-4 flex-shrink-0">

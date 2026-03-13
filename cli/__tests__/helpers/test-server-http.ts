@@ -12,11 +12,10 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { Request, Response } from "express";
 import express from "express";
-import * as fs from "node:fs";
 import { createServer as createHttpServer, Server as HttpServer } from "http";
 import { createServer as createNetServer } from "net";
-import type { ServerConfig } from "./test-fixtures.js";
 import { randomUUID } from "node:crypto";
+import type { ServerConfig } from "./test-fixtures.js";
 
 export interface RecordedRequest {
   method: string;
@@ -66,6 +65,7 @@ export class TestServerHttp {
   private url?: string;
   private currentLogLevel: string | null = null;
   private webAppTransports = new Map<string, StreamableHTTPServerTransport>();
+  private currentRequestHeaders: Record<string, string> = {};
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -179,71 +179,101 @@ export class TestServerHttp {
     }
   }
 
+  /**
+   * Start the server with the specified transport.
+   * When requestedPort is omitted, uses port 0 so the OS assigns a unique port (avoids EADDRINUSE when tests run in parallel).
+   */
   async start(
     transportType: "http" | "sse",
     requestedPort?: number,
   ): Promise<number> {
-    const port = await findAvailablePort(
-      requestedPort || (transportType === "http" ? 3001 : 3000),
-    );
+    const port =
+      requestedPort !== undefined ? await findAvailablePort(requestedPort) : 0;
+
+    if (transportType === "http") {
+      const actualPort = await this.startHttp(port);
+      this.url = `http://localhost:${actualPort}`;
+      return actualPort;
+    } else {
+      const actualPort = await this.startSse(port);
+      this.url = `http://localhost:${actualPort}`;
+      return actualPort;
+    }
+  }
+
+  private async startHttp(port: number): Promise<number> {
     const app = express();
     app.use(express.json());
     this.httpServer = createHttpServer(app);
 
-    if (transportType === "http") {
-      app.post("/mcp", async (req: Request, res: Response) => {
-        const sessionId = req.headers["mcp-session-id"] as string | undefined;
-        this.currentRequestHeaders = extractHeaders(req);
+    app.post("/mcp", async (req: Request, res: Response) => {
+      const sessionId = req.headers["mcp-session-id"] as string | undefined;
+      this.currentRequestHeaders = extractHeaders(req);
 
-        const recorded: RecordedRequest = {
-          method: req.body?.method || "unknown",
-          params: req.body?.params,
-          headers: this.currentRequestHeaders,
-          metadata: req.body?.params?._meta,
-          timestamp: Date.now(),
-          response: { processed: true },
-        };
-        this.recordedRequests.push(recorded);
+      const recorded: RecordedRequest = {
+        method: req.body?.method || "unknown",
+        params: req.body?.params,
+        headers: this.currentRequestHeaders,
+        metadata: req.body?.params?._meta,
+        timestamp: Date.now(),
+        response: { processed: true },
+      };
+      this.recordedRequests.push(recorded);
 
-        if (sessionId) {
-          const transport = this.webAppTransports.get(sessionId);
-          if (!transport) {
-            res.status(404).end("Session not found");
-          } else {
-            await transport.handleRequest(req, res, req.body);
-          }
+      if (sessionId) {
+        const transport = this.webAppTransports.get(sessionId);
+        if (!transport) {
+          res.status(404).end("Session not found");
         } else {
-          const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: randomUUID,
-            onsessioninitialized: (id) =>
-              this.webAppTransports.set(id, transport),
-            onsessionclosed: (id) => this.webAppTransports.delete(id),
-          });
-          await this.server.connect(transport);
           await transport.handleRequest(req, res, req.body);
         }
-      });
-    } else {
-      app.get("/mcp", async (req: Request, res: Response) => {
-        this.currentRequestHeaders = extractHeaders(req);
-        const recorded: RecordedRequest = {
-          method: "sse-connect",
-          headers: this.currentRequestHeaders,
-          timestamp: Date.now(),
-          response: { processed: true },
-        };
-        this.recordedRequests.push(recorded);
-
-        const transport = new SSEServerTransport("/mcp", res);
+      } else {
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: randomUUID,
+          onsessioninitialized: (id) =>
+            this.webAppTransports.set(id, transport),
+          onsessionclosed: (id) => this.webAppTransports.delete(id),
+        });
         await this.server.connect(transport);
-        await transport.start();
-      });
-    }
+        await transport.handleRequest(req, res, req.body);
+      }
+    });
 
     return new Promise((resolve, reject) => {
       this.httpServer!.listen(port, "127.0.0.1", () => {
-        this.url = `http://127.0.0.1:${port}`;
-        resolve(port);
+        const assignedPort = (this.httpServer!.address() as { port: number })
+          ?.port;
+        resolve(assignedPort ?? port);
+      });
+      this.httpServer!.on("error", reject);
+    });
+  }
+
+  private async startSse(port: number): Promise<number> {
+    const app = express();
+    app.use(express.json());
+    this.httpServer = createHttpServer(app);
+
+    app.get("/mcp", async (req: Request, res: Response) => {
+      this.currentRequestHeaders = extractHeaders(req);
+      const recorded: RecordedRequest = {
+        method: "sse-connect",
+        headers: this.currentRequestHeaders,
+        timestamp: Date.now(),
+        response: { processed: true },
+      };
+      this.recordedRequests.push(recorded);
+
+      const transport = new SSEServerTransport("/mcp", res);
+      await this.server.connect(transport);
+      await transport.start();
+    });
+
+    return new Promise((resolve, reject) => {
+      this.httpServer!.listen(port, "127.0.0.1", () => {
+        const assignedPort = (this.httpServer!.address() as { port: number })
+          ?.port;
+        resolve(assignedPort ?? port);
       });
       this.httpServer!.on("error", reject);
     });

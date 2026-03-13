@@ -1,13 +1,19 @@
 import { expect } from "vitest";
 import type { CliResult } from "./cli-runner.js";
 
+function formatCliOutput(result: CliResult): string {
+  const out = result.stdout?.trim() || "(empty)";
+  const err = result.stderr?.trim() || "(empty)";
+  return `stdout: ${out}\nstderr: ${err}`;
+}
+
 /**
  * Assert that CLI command succeeded (exit code 0)
  */
 export function expectCliSuccess(result: CliResult) {
   expect(
     result.exitCode,
-    `CLI failed with code ${result.exitCode}. Output:\n${result.output}`,
+    `CLI exited with code ${result.exitCode}. ${formatCliOutput(result)}`,
   ).toBe(0);
 }
 
@@ -17,7 +23,7 @@ export function expectCliSuccess(result: CliResult) {
 export function expectCliFailure(result: CliResult) {
   expect(
     result.exitCode,
-    `CLI expected to fail but succeeded with code 0. Output:\n${result.output}`,
+    `CLI unexpectedly exited with code ${result.exitCode}. ${formatCliOutput(result)}`,
   ).not.toBe(0);
 }
 
