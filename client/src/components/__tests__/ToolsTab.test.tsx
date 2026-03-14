@@ -13,6 +13,15 @@ import {
 } from "../../utils/metaUtils";
 import { DEFAULT_INSPECTOR_CONFIG } from "../../lib/constants";
 
+// Mock IntersectionObserver
+const mockIntersectionObserver = jest.fn();
+mockIntersectionObserver.mockReturnValue({
+  observe: () => null,
+  unobserve: () => null,
+  disconnect: () => null,
+});
+window.IntersectionObserver = mockIntersectionObserver;
+
 describe("ToolsTab", () => {
   beforeEach(() => {
     // Clear the output schema cache before each test

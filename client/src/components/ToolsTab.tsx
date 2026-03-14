@@ -470,18 +470,21 @@ const ToolsTab = ({
                      * submissions. By targeting a hidden iframe and allowing the event to bubble,
                      * we trick the browser into recording the input values without a page reload.
                      */
-                    <iframe
-                      name="ghost-frame"
-                      id="ghost-frame"
-                      style={{ display: "none" }}
-                      title="ghost-frame"
-                    />
+                    <>
+                      <iframe
+                        name="ghost-frame"
+                        id="ghost-frame"
+                        style={{ display: "none" }}
+                        title="ghost-frame"
+                      />
+                    </>
                   )}
                   <form
+                    id="tool-form"
                     onSubmit={handleSubmit}
                     target={enableHistory ? "ghost-frame" : undefined}
                     method={enableHistory ? "POST" : undefined}
-                    action={enableHistory ? "#" : undefined}
+                    action={enableHistory ? "about:blank" : undefined}
                     autoComplete={enableHistory ? "on" : "off"}
                     className="space-y-4"
                   >
